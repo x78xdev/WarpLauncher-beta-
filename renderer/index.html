@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WarpLaunch</title>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
+  <style>
+:root { 
+  --bg: rgb(15, 15, 20); 
+  --fg:#E8E8F0; 
+  --muted:#A9A9B2; 
+  --accent:#8B5CF6; 
+  --accent-rgb: 139, 92, 246;
+}
+
+/* ===== Fondo con efecto blur animado ===== */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color: var(--fg);
+  background: #0a0a0f00;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  animation: backgroundShift 20s ease infinite;
+  z-index: -1;
+}
+
+@keyframes backgroundShift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-5%, -5%) rotate(5deg); }
+}
+
+/* Textura de grano sutil */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#wrap { 
+  height: 100vh; 
+  display: flex; 
+  align-items: flex-start; 
+  justify-content: center; 
+  padding-top: 8vh; 
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== Paleta mejorada ===== */
+#palette {
+  width: 680px;
+  max-width: 90vw;
+  background: rgba(10, 10, 18, 0.92);          /* Negro muy oscuro y casi opaco */
+  background: 
+    linear-gradient(135deg, 
+      rgba(15, 15, 25, 0.95) 0%, 
+      rgba(8, 8, 20, 0.98) 100%
+    ),
+    rgba(10, 10, 18, 0.92);                     /* Capa base sólida */
+
+  border-radius: 24px;                         /* Bordes más redondeados (más moderno) */
+  backdrop-filter: blur(20px) saturate(180%);  /* Blur más suave y natural */
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  
+  border: 1px solid rgba(80, 80, 120, 0.25);    /* Borde sutil violeta-azulado */
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.6),
+    0 8px 32px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);   /* Brillo interno sutil */
+  
+  overflow: hidden;
+  max-height: calc(100vh - 32px);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 12px 20px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#search {
+  flex: 1;
+  font-size: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 14px 16px;
+  outline: none;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+#search:focus {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+#search::placeholder { 
+  color: var(--muted);
+  font-weight: 400;
+}
+
+#results {
+  list-style: none;
+  margin: 8px 12px 12px;
+  padding: 0;
+  max-height: 340px;
+  overflow: auto;
+}
+
+
+.item.section-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  padding: 4px 10px;
+  margin-top: 6px;
+  border: none;
+  cursor: default;
+}
+
+.item.section-header span {
+  pointer-events: none;
+}
+
+
+/* ===== Items mejorados ===== */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+  position: relative;
+}
+
+.item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.item:hover::before {
+  opacity: 1;
+}
+
+.item:hover { 
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(2px);
+}
+
+.fav-star {
+  margin-right: 4px;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.item.favorite .fav-star {
+  color: var(--accent);
+}
+
+.item.active { 
+  background: rgba(var(--accent-rgb), 0.15);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.2);
+}
+
+.item .icon {
+  font-size: 22px;
+  min-width: 28px;
+  text-align: center;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.item .title { 
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item .subtitle { 
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+/* Badges mejorados */
+.item .badge {
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.item[data-type="MÚSICA"] .badge {
+  background: linear-gradient(135deg, #e91e63, #c2185b);
+  color: white;
+}
+
+.item[data-type="VIDEO"] .badge {
+  background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+  color: white;
+}
+
+.item[data-type="IMAGEN"] .badge {
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+  color: white;
+}
+
+.item[data-type="DOCUMENTO"] .badge {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  color: white;
+}
+
+.item[data-type="HOJA DE CÁLCULO"] .badge {
+  background: linear-gradient(135deg, #00bcd4, #0097a7);
+  color: white;
+}
+
+.item[data-type="PRESENTACIÓN"] .badge {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: white;
+}
+
+.item[data-type="PROGRAMA"] .badge {
+  background: linear-gradient(135deg, #607d8b, #455a64);
+  color: white;
+}
+
+.item[data-type="COMPRIMIDO"] .badge {
+  background: linear-gradient(135deg, #795548, #5d4037);
+  color: white;
+}
+
+.item[data-type="APLICACIÓN"] .badge {
+  background: linear-gradient(135deg, #3f51b5, #303f9f);
+  color: white;
+}
+
+.item[data-type="CARPETA"] .badge {
+  background: linear-gradient(135deg, #ffc107, #ffa000);
+  color: #000;
+}
+
+.item[data-type="COMANDO"] .badge {
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  color: white;
+}
+
+.item[data-type="ARCHIVO"] .badge {
+  background: rgba(255,255,255,.12);
+  color: var(--fg);
+}
+
+.footer {
+  display: flex;
+  gap: 24px;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+}
+
+.footer span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ===== Dock mejorado ===== */
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
+  backdrop-filter: blur(60px) saturate(150%);
+  background: transparent;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 10px 30px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 9999;
+}
+
+.dock-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 24px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dock-btn:hover::before {
+  opacity: 1;
+}
+
+.dock-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.dock-btn.active {
+  background: rgba(var(--accent-rgb), 0.25);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 8px 25px rgba(var(--accent-rgb), 0.3);
+  transform: translateY(-2px);
+}
+
+.dock-btn::after {
+  content: attr(title);
+  position: absolute;
+  left: 50%;
+  bottom: 68px;
+  transform: translateX(-50%) translateY(8px) scale(0.95);
+  opacity: 0;
+  pointer-events: none;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 10px;
+  white-space: nowrap;
+  background: rgba(15, 15, 20, 0.95);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dock-btn:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* ===== Calculadora mejorada ===== */
+.calc-wrap {
+  max-width: 380px;
+  margin: 50px auto 120px;
+  padding: 20px;
+  border-radius: 20px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 40px 80px rgba(0, 0, 0, 0.5),
+    0 20px 40px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(60px);
+}
+
+.calc-history {
+  min-height: 40px;
+  max-height: 100px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  overflow-y: auto;
+}
+
+.calc-history-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.calc-history-entry .expr {
+  opacity: 0.7;
+}
+
+.calc-history-entry .res {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.calc-display {
+  height: 72px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 32px;
+  font-weight: 600;
+  text-align: right;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 16px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  transition: all 0.2s ease;
+}
+
+.calc-display.copied {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2);
+}
+
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.calc-grid button {
+  height: 56px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.calc-grid button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.calc-grid button:hover::before {
+  opacity: 1;
+}
+
+.calc-grid button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.05);
+}
+
+.calc-grid button:active {
+  transform: scale(0.95);
+}
+
+.calc-grid .op {
+  background: rgba(255, 159, 10, 0.25);
+  border-color: rgba(255, 159, 10, 0.3);
+}
+
+.calc-grid .op:hover {
+  background: rgba(255, 159, 10, 0.35);
+}
+
+.calc-grid .eq {
+  background: rgba(52, 199, 89, 0.25);
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
+.calc-grid .eq:hover {
+  background: rgba(52, 199, 89, 0.35);
+}
+
+.calc-grid .zero {
+  grid-column: span 2;
+}
+
+/* ===== Vista IA mejorada ===== */
+.ia-empty {
+  max-width: 520px;
+  margin: 80px auto 140px;
+  padding: 40px 32px;
+  text-align: center;
+  border-radius: 20px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 40px 80px rgba(0, 0, 0, 0.5),
+    0 20px 40px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(60px);
+}
+
+.ia-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3));
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+}
+
+.ia-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #fff, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ia-sub {
+  opacity: 0.7;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* Scrollbar personalizado */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.5);
+}
+
+[hidden] {
+  display: none;
+}
+  </style>
+</head>
+<body>
+  <div id="wrap" hidden>
+    <div id="palette">
+      <div class="header">
+        <input id="search" type="text" placeholder="Type to search…   (apps, files, commands)" autofocus />
+      </div>
+      <ul id="results"></ul> 
+      <div class="footer">
+        <span>↑/↓ navegar</span>
+        <span>↵ abrir</span>
+        <span>Esc cerrar</span>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <!-- ===== View: IA (placeholder) ===== -->
+  <div id="view-ia" hidden>
+    <div class="ia-empty">
+      <div class="ia-badge">IA</div>
+      <div class="ia-title">Próximamente</div>
+      <div class="ia-sub">Aquí vivirá tu asistente IA.</div>
+    </div>
+  </div>
+
+  <!-- ===== DOCK (abajo centrado) ===== -->
+  <div id="dock" class="dock">
+    <button class="dock-btn active" data-view="search" title="Launcher">
+      <span class="dock-icon">🗂️</span>
+    </button>
+    <button class="dock-btn" data-view="tareas" title="Tareas">
+      <span class="dock-icon">🎯</span>
+    </button>
+    <button class="dock-btn" data-view="Notas" title="Notas">
+      <span class="dock-icon">📋</span>
+    </button>
+    <button class="dock-btn" data-view="Configuración" title="Configuración">
+      <span class="dock-icon">⚙️</span>
+    </button>
+    <button class="dock-btn" data-view="ia" title="IA">
+      <span class="dock-icon">✨</span>
+    </button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+  <script src="app.js"></script>
+</body>
+</html>

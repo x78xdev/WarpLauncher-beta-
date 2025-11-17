@@ -1,0 +1,24 @@
+# dependencias y builds
+node_modules/
+**/node_modules/
+dist/
+build/
+out/
+release/
+
+# binarios grandes
+*.exe
+*.dll
+*.zip
+*.7z
+*.rar
+*.mp4
+*.mov
+*.iso
+
+# otros
+.env
+*.log
+.DS_Store
+Thumbs.db
+/renderer

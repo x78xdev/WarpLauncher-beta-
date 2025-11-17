@@ -1,0 +1,6 @@
+[
+  { "title": "Configurar red", "run": "ncpa.cpl" },
+  { "title": "Panel de control", "run": "control" },
+  { "title": "Carpeta Descargas", "open": "%USERPROFILE%/Downloads" },
+  { "title": "GitHub", "open": "https://github.com" }
+]

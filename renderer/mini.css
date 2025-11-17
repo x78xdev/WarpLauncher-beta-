@@ -1,0 +1,107 @@
+html,body{
+  margin:0;
+  padding:0;
+  background:transparent;
+  color:#fff;
+  font-family:system-ui,Segoe UI,Roboto,Inter;
+}
+
+/* Ventana mini Spotify */
+.mini{
+  position: fixed;
+  top: 3px;          /* distancia desde arriba */
+  right: 6px;        /* distancia desde la derecha */
+  width: 260px;       /* ancho más pequeño */
+  padding: 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(12px) saturate(120%);
+  background: rgba(15,15,15,.6);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+  z-index: 9999;      /* siempre visible encima */
+}
+
+.mini-head{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+.mini-txt{
+  flex: 1;
+  min-width: 0;
+}
+
+
+
+.mini-close{
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  cursor: pointer;
+}
+.mini-close:hover{
+  background: rgba(255,255,255,.12);
+}
+
+
+
+/* --- ya tienes lo de arriba --- */
+
+/* Carátula redonda que gira cuando reproduce */
+.mini-icon{
+  width: 40px; height: 40px;            /* sin cambiar tamaño del card */
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.15), 0 6px 14px rgba(0,0,0,.35);
+  transition: transform .35s ease;
+}
+.spin { animation: spin 8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Título + artista en una sola línea con elipsis */
+.mini-title{
+  font-weight: 700; letter-spacing:.2px; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mini-sub{
+  opacity:.75; font-size: 11px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Botones mejorados (vidrio + foco) */
+.mini-controls{ display:flex; gap:8px; justify-content:center; margin-top:10px; }
+
+.mc{
+  min-width: 40px; height: 36px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+  box-shadow: 0 1px 0 rgba(255,255,255,.15) inset, 0 6px 16px rgba(0,0,0,.35);
+  color:#fff; font-size:0; cursor:pointer; position:relative;
+}
+.mc:before{           /* icono svg embebido por clase */
+  content:""; display:block; width:18px; height:18px; margin:0 auto;
+  mask-repeat:no-repeat; mask-position:center; mask-size:contain;
+  background:#fff;
+  position:absolute; inset:0; margin:auto;
+}
+.mc:hover{ background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.08)); }
+.mc:active{ transform: translateY(1px); }
+
+/* Iconos (más nítidos que emojis) */
+.mc.prev:before { mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M6 5h2v14H6V5zm3.5 7 8.5 5V7l-8.5 5z"/></svg>'); }
+.mc.play:before { mask-image: var(--icon-play); }
+.mc.pause:before{ mask-image: var(--icon-pause); }
+.mc.next:before { mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M16 19h2V5h-2v14zM6 7v10l8.5-5L6 7z"/></svg>'); }
+.mc.open:before { mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3zM5 5h6v2H7v10h10v-4h2v6H5V5z"/></svg>'); }
+
+/* Variables de icono play/pause (cambiamos clase en JS) */
+:root{
+  --icon-play: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M8 5v14l11-7z"/></svg>');
+  --icon-pause:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>');
+}
+
