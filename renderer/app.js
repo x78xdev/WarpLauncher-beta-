@@ -12,11 +12,20 @@ let currentResults = [];
 
 let currentQuery = "";
 let currentFilterKind = null; // "app" | "file" | "command" | null
+// proyectos de tareas
+let taskProjects = []; // [{id, name, createdAt}]
+let tasksByProject = {}; // { [projectId]: {idea:[], doing:[], done:[]} }
+let currentProjectId = null;
 
 // ===== Favoritos y recientes =====
 let favorites = [];
 let recents = [];
 let usage = {};
+let tasks = {
+  idea: [],
+  doing: [],
+  done: []
+};
 const RECENTS_LIMIT = 30;
 const STORAGE_KEY = 'warplaunch_state_v1';
 
@@ -25,29 +34,59 @@ const dockEl = document.getElementById('dock');
 const wrapEl = document.getElementById('wrap');
 const viewCalc = document.getElementById('view-calc');
 const viewIA = document.getElementById('view-ia');
+const viewTasks = document.getElementById('view-tareas');
+const tasksBoardEl = document.getElementById('tasks-board');
+const addTaskBtn = document.getElementById('btn-add-task');
+const taskForm = document.getElementById('task-form');
+const taskTitleInput = document.getElementById('task-title-input');
+const taskBodyInput = document.getElementById('task-body-input');
 
-const views = ['search', 'calc', 'ia'];
+// elementos de Tareas
+const tasksViewTitle = document.getElementById('tasks-view-title');
+const tasksViewSubtitle = document.getElementById('tasks-view-subtitle');
+const btnTasksBack = document.getElementById('btn-tasks-back');
+const btnAddProject = document.getElementById('btn-add-project');
+const btnAddTask = document.getElementById('btn-add-task');
+
+const tasksProjectsView = document.getElementById('tasks-projects-view');
+const projectsGridEl = document.getElementById('projects-grid');
+
+const tasksBoardView = document.getElementById('tasks-board-view');
+
+const projectCreateBar = document.getElementById('project-create-bar');
+const projectForm = document.getElementById('project-form');
+const projectNameInput = document.getElementById('project-name-input');
+const btnCancelProject = document.getElementById('btn-cancel-project');
+
+// Modal añadir tarea
+const addTaskModal = document.getElementById('add-task-modal');
+const btnCancelAddTask = document.getElementById('btn-cancel-add-task');
+
+
+
+const views = ['search', 'calc', 'ia', 'tareas'];
 
 
 // utilidades para mostrar/ocultar...
-function showEl(el)  { if (el) { el.hidden = false; el.style.display = ''; } }
-function hideEl(el)  { if (el) { el.hidden = true;  el.style.display = 'none'; } }
+function showEl(el) { if (el) { el.hidden = false; el.style.display = ''; } }
+function hideEl(el) { if (el) { el.hidden = true; el.style.display = 'none'; } }
 
 function switchView(name) {
-  currentView = name;   // <- nuevo
+  currentView = name;
 
   views.forEach(v => {
-    const panel = (v === 'search')
-      ? document.getElementById('wrap')
-      : document.getElementById(`view-${v}`);
-    const btn   = document.querySelector(`#dock [data-view="${v}"]`);
+    const panel =
+      v === 'search'
+        ? document.getElementById('wrap')
+        : document.getElementById(`view-${v}`);
+    const btn = document.querySelector(`#dock [data-view="${v}"]`);
 
-    if (!panel) return;
-
-    if (v === name) {
-      showEl(panel);
-    } else {
-      hideEl(panel);
+    if (panel) {
+      if (v === name) {
+        showEl(panel);
+      } else {
+        hideEl(panel);
+      }
     }
 
     if (btn) {
@@ -62,7 +101,13 @@ function switchView(name) {
       input.select?.();
     }
   }
+
+  if (name === 'tareas') {
+    openProjectsView();
+  }
 }
+
+
 
 function buildStaticModel(commands = [], apps = []) {
   const out = [];
@@ -77,13 +122,18 @@ function buildStaticModel(commands = [], apps = []) {
     });
   });
 
-  apps.forEach((app) => {
+  console.log('🏗️ Construyendo modelo con', apps.length, 'apps');
+  apps.forEach((app, index) => {
+    if (index === 0) {
+      console.log('🔍 Primera app en buildStaticModel:', app.title, 'iconDataUrl:', !!app.iconDataUrl);
+    }
     out.push({
       kind: 'app',
       title: app.title,
       subtitle: app.subtitle || app.path || '',
       tag: 'APP',
       run: app.run || app.path,
+      iconDataUrl: app.iconDataUrl,  // Incluir el icono directamente
       data: app
     });
   });
@@ -124,28 +174,440 @@ function loadState() {
 
     const parsed = JSON.parse(raw);
 
-    if (Array.isArray(parsed.favorites)) {
-      favorites = parsed.favorites;
+    favorites = Array.isArray(parsed.favorites) ? parsed.favorites : [];
+    recents = Array.isArray(parsed.recents) ? parsed.recents : [];
+    usage = parsed.usage && typeof parsed.usage === 'object' ? parsed.usage : {};
+
+    if (Array.isArray(parsed.taskProjects)) {
+      taskProjects = parsed.taskProjects;
     }
-    if (Array.isArray(parsed.recents)) {
-      recents = parsed.recents;
-    }
-    if (parsed.usage && typeof parsed.usage === "object") {
-      usage = parsed.usage;
+
+    if (parsed.tasksByProject && typeof parsed.tasksByProject === 'object') {
+      tasksByProject = parsed.tasksByProject;
+    } else if (parsed.tasks && typeof parsed.tasks === 'object') {
+      // migración simple de versión anterior: un proyecto "General"
+      const defaultId = 'general';
+      taskProjects = [
+        {
+          id: defaultId,
+          name: 'General',
+          createdAt: Date.now()
+        }
+      ];
+      tasksByProject = {
+        [defaultId]: {
+          idea: parsed.tasks.idea || [],
+          doing: parsed.tasks.doing || [],
+          done: parsed.tasks.done || []
+        }
+      };
     }
   } catch (err) {
-    console.warn("No se pudo cargar favoritos/recientes/uso:", err);
+    console.warn('No se pudo cargar el estado:', err);
   }
 }
 
 function saveState() {
   try {
-    const payload = { favorites, recents, usage };
+    const payload = {
+      favorites,
+      recents,
+      usage,
+      taskProjects,
+      tasksByProject
+    };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (err) {
-    console.warn("No se pudo guardar favoritos/recientes/uso:", err);
+    console.warn('No se pudo guardar el estado:', err);
   }
 }
+
+// ===== Utilidades Tareas / Proyectos =====
+
+const TASK_STATUSES = ['idea', 'doing', 'done'];
+
+function ensureProjectTasks(projectId) {
+  if (!tasksByProject[projectId]) {
+    tasksByProject[projectId] = {
+      idea: [],
+      doing: [],
+      done: []
+    };
+  }
+  return tasksByProject[projectId];
+}
+
+function getCurrentTaskGroups() {
+  if (!currentProjectId) return null;
+  return ensureProjectTasks(currentProjectId);
+}
+
+// ---- Proyectos ----
+
+function createProject(name) {
+  const trimmed = (name || '').trim();
+
+  // Validar que el nombre no esté vacío
+  if (!trimmed) {
+    alert('El nombre del proyecto no puede estar vacío');
+    return;
+  }
+
+  const project = {
+    id:
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2, 8),
+    name: trimmed,
+    createdAt: Date.now()
+  };
+
+  taskProjects.push(project);
+  ensureProjectTasks(project.id);
+  saveState();
+  renderProjects();
+  openProjectBoard(project.id);
+}
+
+function deleteProject(id) {
+  if (!confirm('¿Estás seguro de eliminar este proyecto y todas sus tareas?')) return;
+  taskProjects = taskProjects.filter(p => p.id !== id);
+  delete tasksByProject[id];
+  saveState();
+  renderProjects();
+}
+
+function renderProjects() {
+  if (!projectsGridEl) return;
+
+  projectsGridEl.innerHTML = '';
+
+  // Si no hay proyectos, mostrar mensaje de bienvenida
+  if (taskProjects.length === 0) {
+    const emptyState = document.createElement('div');
+    emptyState.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px;';
+
+    projectsGridEl.appendChild(emptyState);
+  } else {
+    // cards de proyectos existentes
+    taskProjects.forEach(p => {
+      const groups = tasksByProject[p.id] || { idea: [], doing: [], done: [] };
+      const total =
+        (groups.idea?.length || 0) +
+        (groups.doing?.length || 0) +
+        (groups.done?.length || 0);
+
+      const card = document.createElement('article');
+      card.className = 'project-card';
+      card.dataset.projectId = p.id;
+      card.innerHTML = `
+        <div class="project-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="project-name" style="margin:0;">${escapeHtml(p.name)}</div>
+          <button class="project-delete-btn" data-role="project-delete" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:16px;padding:0 4px;">&times;</button>
+        </div>
+        <div class="project-meta" style="margin-top:4px;">${total} ${total === 1 ? 'tarea' : 'Proyectos'}</div>
+      `;
+      projectsGridEl.appendChild(card);
+    });
+  }
+
+  // card para crear nuevo (siempre visible)
+  const newCard = document.createElement('article');
+  newCard.className = 'project-card project-card-new';
+  newCard.dataset.role = 'project-new';
+  newCard.innerHTML = `
+    <div class="project-name">＋ Crear nuevo proyecto</div>
+    <div class="project-meta">Empieza un tablero vacío</div>
+  `;
+  projectsGridEl.appendChild(newCard);
+}
+
+function openProjectsView() {
+  currentProjectId = null;
+
+  if (tasksViewTitle) tasksViewTitle.textContent = 'Proyectos';
+  if (tasksViewSubtitle)
+    tasksViewSubtitle.textContent = 'Elige un proyecto o crea uno nuevo';
+
+  if (btnTasksBack) btnTasksBack.hidden = true;
+  if (btnAddTask) btnAddTask.hidden = true;
+  if (btnAddProject) btnAddProject.hidden = false;
+
+  if (tasksProjectsView) {
+    tasksProjectsView.hidden = false;
+    tasksProjectsView.style.display = ''; // Limpiar estilo inline
+  }
+  if (tasksBoardView) {
+    tasksBoardView.hidden = true;
+    tasksBoardView.style.display = ''; // Limpiar estilo inline
+  }
+
+  hideProjectCreateBar();
+  renderProjects();
+}
+
+
+function showProjectCreateBar() {
+  if (!projectCreateBar) return;
+  projectCreateBar.hidden = false;
+  if (projectNameInput) {
+    projectNameInput.focus();
+    projectNameInput.select?.();
+  }
+}
+
+function hideProjectCreateBar() {
+  if (!projectCreateBar) return;
+  projectCreateBar.hidden = true;
+  if (projectNameInput) projectNameInput.value = '';
+}
+
+
+function openProjectBoard(projectId) {
+  currentProjectId = projectId;
+  const project = taskProjects.find(p => p.id === projectId);
+
+  if (tasksViewTitle) {
+    tasksViewTitle.textContent = project ? project.name : 'Proyecto';
+  }
+  if (tasksViewSubtitle) {
+    tasksViewSubtitle.textContent =
+      'Arrastra las tareas entre columnas para organizar tu proyecto';
+  }
+
+  if (btnTasksBack) btnTasksBack.hidden = false;
+  if (btnAddTask) btnAddTask.hidden = false;
+  if (btnAddProject) btnAddProject.hidden = true;
+
+  if (tasksProjectsView) {
+    tasksProjectsView.hidden = true;
+    tasksProjectsView.style.display = ''; // Limpiar estilo inline
+  }
+  if (tasksBoardView) {
+    tasksBoardView.hidden = false;
+    tasksBoardView.style.display = ''; // Limpiar estilo inline
+  }
+
+  renderTasksBoard();
+}
+
+// ---- Tareas dentro de un proyecto ----
+
+function createTask(title, body) {
+  const groups = getCurrentTaskGroups();
+  if (!groups) return; // sin proyecto no hacemos nada
+
+  const task = {
+    id:
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2, 8),
+    title: (title || '').trim() || 'Nueva tarea',
+    body: (body || '').trim(),
+    status: 'idea',
+    createdAt: Date.now()
+  };
+
+  groups.idea.unshift(task);
+  saveState();
+  renderTasksBoard();
+}
+
+function deleteTask(id) {
+  const groups = getCurrentTaskGroups();
+  if (!groups) return;
+
+  for (const key of TASK_STATUSES) {
+    const list = groups[key];
+    if (!Array.isArray(list)) continue;
+    const idx = list.findIndex(t => t.id === id);
+    if (idx !== -1) {
+      list.splice(idx, 1);
+      break;
+    }
+  }
+  saveState();
+  renderTasksBoard();
+}
+
+function moveTaskToStatus(id, status) {
+  if (!TASK_STATUSES.includes(status)) return;
+  const groups = getCurrentTaskGroups();
+  if (!groups) return;
+
+  let task = null;
+
+  for (const key of TASK_STATUSES) {
+    const list = groups[key];
+    if (!Array.isArray(list)) continue;
+    const idx = list.findIndex(t => t.id === id);
+    if (idx !== -1) {
+      task = list.splice(idx, 1)[0];
+      break;
+    }
+  }
+
+  if (!task) return;
+
+  task.status = status;
+  groups[status].unshift(task);
+
+  saveState();
+  renderTasksBoard();
+}
+
+function editTask(id) {
+  const groups = getCurrentTaskGroups();
+  if (!groups) return;
+
+  let task = null;
+  for (const key of TASK_STATUSES) {
+    const list = groups[key];
+    if (!Array.isArray(list)) continue;
+    const t = list.find(x => x.id === id);
+    if (t) {
+      task = t;
+      break;
+    }
+  }
+
+  if (!task) return;
+
+  // Usar modal en lugar de prompt
+  const modal = document.getElementById('edit-task-modal');
+  const titleInput = document.getElementById('edit-task-title');
+  const bodyInput = document.getElementById('edit-task-body');
+  const btnSave = document.getElementById('btn-save-edit');
+  const btnCancel = document.getElementById('btn-cancel-edit');
+
+  if (!modal || !titleInput || !bodyInput || !btnSave || !btnCancel) return;
+
+  titleInput.value = task.title;
+  bodyInput.value = task.body || '';
+  modal.hidden = false;
+  titleInput.focus();
+  titleInput.select();
+
+  const save = () => {
+    const newTitle = titleInput.value.trim();
+    const newBody = bodyInput.value.trim();
+
+    if (newTitle) {
+      task.title = newTitle;
+      task.body = newBody;
+      saveState();
+      renderTasksBoard();
+    }
+    close();
+  };
+
+  const close = () => {
+    modal.hidden = true;
+    btnSave.onclick = null;
+    btnCancel.onclick = null;
+    modal.onclick = null;
+    document.removeEventListener('keydown', handleKeyDown);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      save();
+    }
+  };
+
+  btnCancel.onclick = close;
+  btnSave.onclick = save;
+
+  // Close on click outside modal-content
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      close();
+    }
+  };
+
+  // ESC key to close, Ctrl+Enter to save
+  document.addEventListener('keydown', handleKeyDown);
+}
+
+function renderTasksBoard() {
+  const colIdea = document.getElementById('tasks-idea');
+  const colDoing = document.getElementById('tasks-doing');
+  const colDone = document.getElementById('tasks-done');
+  if (!colIdea || !colDoing || !colDone) return;
+
+  const groups = getCurrentTaskGroups();
+  if (!groups) {
+    colIdea.innerHTML = '';
+    colDoing.innerHTML = '';
+    colDone.innerHTML = '';
+    return;
+  }
+
+  colIdea.innerHTML = '';
+  colDoing.innerHTML = '';
+  colDone.innerHTML = '';
+
+  function makeCard(task) {
+    const el = document.createElement('article');
+    el.className = 'task-card';
+    el.dataset.id = task.id;
+    el.draggable = true;
+    el.innerHTML = `
+      <div class="task-title">${escapeHtml(task.title)}</div>
+      ${task.body ? `<div class="task-body">${escapeHtml(task.body)}</div>` : ''}
+      <div class="task-footer">
+        <span class="task-footer-hint">Arrastra para cambiar</span>
+        <div style="display:flex;gap:4px;">
+          <button class="task-edit" data-role="task-edit" style="font-size:10px;padding:2px 6px;">Editar</button>
+          <button class="task-delete" data-role="task-delete" style="font-size:10px;padding:2px 6px;">Eliminar</button>
+        </div>
+      </div>
+    `;
+    return el;
+  }
+
+  function makeEmptyHint(text) {
+    const el = document.createElement('div');
+    el.className = 'task-empty-hint';
+    el.style.cssText = 'padding: 16px; text-align: center; opacity: 0.5; font-size: 12px;';
+    el.textContent = text;
+    return el;
+  }
+
+  const ideaTasks = groups.idea || [];
+  const doingTasks = groups.doing || [];
+  const doneTasks = groups.done || [];
+
+  if (ideaTasks.length === 0) {
+    colIdea.appendChild(makeEmptyHint('Arrastra tareas aquí o crea nuevas ideas'));
+  } else {
+    ideaTasks.forEach(t => colIdea.appendChild(makeCard(t)));
+  }
+
+  if (doingTasks.length === 0) {
+    colDoing.appendChild(makeEmptyHint('Arrastra tareas en progreso aquí'));
+  } else {
+    doingTasks.forEach(t => colDoing.appendChild(makeCard(t)));
+  }
+
+  if (doneTasks.length === 0) {
+    colDone.appendChild(makeEmptyHint('Arrastra tareas completadas aquí'));
+  } else {
+    doneTasks.forEach(t => colDone.appendChild(makeCard(t)));
+  }
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+
+
 
 function bumpUsage(item) {
   if (!canBePinned(item)) return;
@@ -383,8 +845,8 @@ function equals() {
 }
 
 function percent() { calc.cur = String(parseFloat(calc.cur) / 100); setDisp(calc.cur); }
-function negate()  { if (calc.cur !== '0') { calc.cur = calc.cur.startsWith('-') ? calc.cur.slice(1) : '-' + calc.cur; setDisp(calc.cur); } }
-function clearAll(){ calc = { cur: '0', prev: null, op: null, justEq: false }; setDisp(calc.cur); }
+function negate() { if (calc.cur !== '0') { calc.cur = calc.cur.startsWith('-') ? calc.cur.slice(1) : '-' + calc.cur; setDisp(calc.cur); } }
+function clearAll() { calc = { cur: '0', prev: null, op: null, justEq: false }; setDisp(calc.cur); }
 
 
 
@@ -577,67 +1039,67 @@ function renderMerged() {
     if (!fuse || !q) {
       // === Caso importante: sin texto y sin filtro -> secciones bonitas ===
       if (!q && !filterKind) {
-      const favKeys = new Set(favorites.map(getItemKey));
-      const recKeys = new Set(recents.map(getItemKey));
+        const favKeys = new Set(favorites.map(getItemKey));
+        const recKeys = new Set(recents.map(getItemKey));
 
-      const favItems = favorites
-        .filter((f) => canBePinned(f))
-        .slice(0, 10);
+        const favItems = favorites
+          .filter((f) => canBePinned(f))
+          .slice(0, 10);
 
-      const recentItems = recents
-        .filter((r) => canBePinned(r) && !favKeys.has(getItemKey(r)))
-        .slice(0, 15);
+        const recentItems = recents
+          .filter((r) => canBePinned(r) && !favKeys.has(getItemKey(r)))
+          .slice(0, 15);
 
-      const suggestedApps = staticModel
-        .filter(
-          (i) =>
-            i.kind === "app" &&
-            !favKeys.has(getItemKey(i)) &&
-            !recKeys.has(getItemKey(i))
-        )
-        .sort(sortByUsageDescThenTitle)
-        .slice(0, 10);
+        const suggestedApps = staticModel
+          .filter(
+            (i) =>
+              i.kind === "app" &&
+              !favKeys.has(getItemKey(i)) &&
+              !recKeys.has(getItemKey(i))
+          )
+          .sort(sortByUsageDescThenTitle)
+          .slice(0, 10);
 
-      const suggestedOthers = staticModel
-        .filter(
-          (i) =>
-            i.kind !== "app" &&
-            !favKeys.has(getItemKey(i)) &&
-            !recKeys.has(getItemKey(i))
-        )
-        .sort(sortByUsageDescThenTitle)
-        .slice(0, 15);
+        const suggestedOthers = staticModel
+          .filter(
+            (i) =>
+              i.kind !== "app" &&
+              !favKeys.has(getItemKey(i)) &&
+              !recKeys.has(getItemKey(i))
+          )
+          .sort(sortByUsageDescThenTitle)
+          .slice(0, 15);
 
-      const sections = [];
+        const sections = [];
 
-      if (favItems.length) {
-        sections.push({ kind: "section", title: "Favoritos" }, ...favItems);
+        if (favItems.length) {
+          sections.push({ kind: "section", title: "Favoritos" }, ...favItems);
+        }
+
+        if (recentItems.length) {
+          sections.push({ kind: "section", title: "Recientes" }, ...recentItems);
+        }
+
+        if (suggestedApps.length || suggestedOthers.length) {
+          sections.push(
+            { kind: "section", title: "Sugeridos" },
+            ...suggestedApps,
+            ...suggestedOthers
+          );
+        }
+
+        if (!sections.length) {
+          sections.push({
+            kind: "info",
+            title: "Empieza a usar WarpLaunch",
+            subtitle: "Abre algunas apps o archivos para ver recientes y sugerencias aquí.",
+            tag: "INFO"
+          });
+        }
+
+        render(sections);
+        return;
       }
-
-      if (recentItems.length) {
-        sections.push({ kind: "section", title: "Recientes" }, ...recentItems);
-      }
-
-      if (suggestedApps.length || suggestedOthers.length) {
-        sections.push(
-          { kind: "section", title: "Sugeridos" },
-          ...suggestedApps,
-          ...suggestedOthers
-        );
-      }
-
-      if (!sections.length) {
-        sections.push({
-          kind: "info",
-          title: "Empieza a usar WarpLaunch",
-          subtitle: "Abre algunas apps o archivos para ver recientes y sugerencias aquí.",
-          tag: "INFO"
-        });
-      }
-
-      render(sections);
-      return;
-    }
 
 
       // Sin texto pero con filtro app/file/cmd
@@ -718,7 +1180,7 @@ function renderMerged() {
 
 function toItem(kind, obj) {
   if (kind === "command") {
-    return { 
+    return {
       kind,
       title: obj.title,
       subtitle: obj.subtitle || obj.run,
@@ -739,6 +1201,7 @@ function toItem(kind, obj) {
     };
   }
   if (kind === "app") {
+    console.log('📦 toItem para app:', obj.title, 'iconDataUrl:', !!obj.iconDataUrl);
     return {
       kind: "app",
       type: "app",
@@ -747,10 +1210,13 @@ function toItem(kind, obj) {
       run: obj.run,
       open: obj.open,
       icon: obj.icon,
-      tag: obj.tag || "APLICACIÓN"
+      iconDataUrl: obj.iconDataUrl,  // ¡IMPORTANTE! Preservar el iconDataUrl
+      tag: obj.tag || "APLICACIÓN",
+      data: obj  // También preservar el objeto completo por si acaso
     };
   }
 }
+
 
 function updateActiveItem() {
   const items = resultsEl.querySelectorAll('.item');
@@ -813,8 +1279,8 @@ function render(list) {
     const isDir =
       item.kind === "file"
         ? (item.isDir != null
-            ? !!item.isDir
-            : guessIsDir(pathLike))
+          ? !!item.isDir
+          : guessIsDir(pathLike))
         : false;
 
     // Inicializamos flags
@@ -906,40 +1372,65 @@ function render(list) {
 
     li.dataset.index = i;
 
+
     const titleDiv = document.createElement("div");
     titleDiv.className = "title";
 
+
     // Icono
     if (item.kind === 'file' || item.kind === 'app' || item.kind === 'calc-inline') {
-      const icon = document.createElement("span");
-      icon.className = "icon";
+      const iconContainer = document.createElement("span");
+      iconContainer.className = "icon";
 
-      if (item.icon) {
-        icon.textContent = item.icon;
+      // Para apps, intentar usar el icono real primero
+      if (item.kind === 'app' && item.iconDataUrl) {
+        console.log('🖼️ Mostrando icono real para:', item.title);
+        const img = document.createElement("img");
+        img.src = item.iconDataUrl;
+        img.alt = item.title;
+        img.style.width = "22px";
+        img.style.height = "22px";
+        img.style.objectFit = "contain";
+        iconContainer.appendChild(img);
+      } else if (item.kind === 'app' && item.data?.iconDataUrl) {
+        console.log('🖼️ Mostrando icono real (data) para:', item.title);
+        // También verificar en item.data por si viene de ahí
+        const img = document.createElement("img");
+        img.src = item.data.iconDataUrl;
+        img.alt = item.title;
+        img.style.width = "22px";
+        img.style.height = "22px";
+        img.style.objectFit = "contain";
+        iconContainer.appendChild(img);
+      } else if (item.icon) {
+        iconContainer.textContent = item.icon;
       } else if (item.kind === 'file') {
         if (isDir) {
-          icon.textContent = '📁';
+          iconContainer.textContent = '📁';
         } else if (isArchive) {
-          icon.textContent = '🗜️';
+          iconContainer.textContent = '🗜️';
         } else if (isPdf) {
-          icon.textContent = '📕';
+          iconContainer.textContent = '📕';
         } else if (isImage) {
-          icon.textContent = '🖼️';
+          iconContainer.textContent = '🖼️';
         } else if (isVideo) {
-          icon.textContent = '🎬';
+          iconContainer.textContent = '🎬';
         } else if (isAudio) {
-          icon.textContent = '🎵';
+          iconContainer.textContent = '🎵';
         } else {
-          icon.textContent = '📄';
+          iconContainer.textContent = '📄';
         }
       } else if (item.kind === 'app') {
-        icon.textContent = '⚙️';
+        // Fallback a emoji si no hay icono
+        console.log('⚠️ Sin icono para app:', item.title, 'iconDataUrl:', item.iconDataUrl);
+        iconContainer.textContent = '⚙️';
       } else if (item.kind === 'calc-inline') {
-        icon.textContent = '🧮';
+        iconContainer.textContent = '🧮';
       }
 
-      titleDiv.appendChild(icon);
+      titleDiv.appendChild(iconContainer);
     }
+
 
     // Estrella de favorito
     if (fav) {
@@ -1020,7 +1511,7 @@ function render(list) {
 async function runItem(item) {
   try {
     if (!item) return;
-    
+
     // No hacer nada si es encabezado de sección
     if (item.kind === 'section') {
       return;
@@ -1057,7 +1548,7 @@ async function runItem(item) {
       const expr = item.data?.expr || inputEl.value.trim();
       const result = item.data?.result;
 
-      
+
       if (typeof result === 'number' && typeof setCalcFromExpression === 'function') {
         setCalcFromExpression(expr, result);
       }
@@ -1153,7 +1644,202 @@ inputEl.addEventListener("input", () => {
   handleSearchInput(inputEl.value);
 });
 
+// ===== Eventos de TAREAS =====
+
+// ---- Eventos de PROYECTOS ----
+
+// Botón "Nuevo proyecto" en la cabecera
+if (btnAddProject) {
+  btnAddProject.addEventListener('click', () => {
+    showProjectCreateBar();
+  });
+}
+
+// Clicks en el grid de proyectos
+if (projectsGridEl) {
+  projectsGridEl.addEventListener('click', (e) => {
+    const newCard = e.target.closest('[data-role="project-new"]');
+    if (newCard) {
+      showProjectCreateBar();
+      return;
+    }
+
+    const deleteBtn = e.target.closest('[data-role="project-delete"]');
+    if (deleteBtn) {
+      e.stopPropagation();
+      const card = deleteBtn.closest('.project-card');
+      if (card && card.dataset.projectId) {
+        deleteProject(card.dataset.projectId);
+      }
+      return;
+    }
+
+    const card = e.target.closest('.project-card');
+    if (!card || !card.dataset.projectId) return;
+    openProjectBoard(card.dataset.projectId);
+  });
+}
+
+
+if (btnTasksBack) {
+  btnTasksBack.addEventListener('click', () => {
+    openProjectsView();
+  });
+}
+
+// ---- Eventos de TAREAS (formulario) ----
+
+// Formulario de creación de proyecto
+if (projectForm && projectNameInput) {
+  projectForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = projectNameInput.value.trim();
+    if (!name) {
+      projectNameInput.focus();
+      return;
+    }
+    createProject(name);
+    hideProjectCreateBar();
+  });
+}
+
+if (btnCancelProject) {
+  btnCancelProject.addEventListener('click', () => {
+    hideProjectCreateBar();
+  });
+}
+
+
+// Helper para cerrar modal de añadir tarea
+function closeAddTaskModal() {
+  if (addTaskModal) addTaskModal.hidden = true;
+  if (taskTitleInput) taskTitleInput.value = '';
+  if (taskBodyInput) taskBodyInput.value = '';
+}
+
+if (taskForm && taskTitleInput) {
+  taskForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const title = taskTitleInput.value.trim();
+    const body = taskBodyInput ? taskBodyInput.value : '';
+    if (!title || !currentProjectId) {
+      taskTitleInput.focus();
+      return;
+    }
+    createTask(title, body);
+    closeAddTaskModal();
+  });
+}
+
+if (btnAddTask) {
+  btnAddTask.addEventListener('click', () => {
+    if (!currentProjectId) return;
+    if (addTaskModal) {
+      addTaskModal.hidden = false;
+      // Limpiar inputs anteriores
+      if (taskTitleInput) taskTitleInput.value = '';
+      if (taskBodyInput) taskBodyInput.value = '';
+      setTimeout(() => taskTitleInput?.focus(), 50);
+    }
+  });
+}
+
+if (btnCancelAddTask) {
+  btnCancelAddTask.addEventListener('click', closeAddTaskModal);
+}
+
+if (addTaskModal) {
+  addTaskModal.addEventListener('click', (e) => {
+    if (e.target === addTaskModal) closeAddTaskModal();
+  });
+}
+
+// ---- Drag & drop en el tablero de tareas ----
+
+if (tasksBoardEl) {
+  // eliminar tarea
+  // eliminar / editar tarea
+  tasksBoardEl.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('[data-role="task-delete"]');
+    if (deleteBtn) {
+      const card = deleteBtn.closest('.task-card');
+      if (card) deleteTask(card.dataset.id);
+      return;
+    }
+
+    const editBtn = e.target.closest('[data-role="task-edit"]');
+    if (editBtn) {
+      const card = editBtn.closest('.task-card');
+      if (card) editTask(card.dataset.id);
+      return;
+    }
+  });
+
+  // drag start
+  tasksBoardEl.addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.task-card');
+    if (!card) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', card.dataset.id);
+    card.classList.add('dragging');
+  });
+
+  // drag end
+  tasksBoardEl.addEventListener('dragend', (e) => {
+    const card = e.target.closest('.task-card');
+    if (card) card.classList.remove('dragging');
+    document
+      .querySelectorAll('.tasks-column.drag-over')
+      .forEach(col => col.classList.remove('drag-over'));
+  });
+
+  // drag over
+  tasksBoardEl.addEventListener('dragover', (e) => {
+    const column = e.target.closest('.tasks-column');
+    if (!column) return;
+    e.preventDefault();
+    document
+      .querySelectorAll('.tasks-column.drag-over')
+      .forEach(col => col.classList.remove('drag-over'));
+    column.classList.add('drag-over');
+  });
+
+  // drop
+  tasksBoardEl.addEventListener('drop', (e) => {
+    if (!(e.target instanceof Element)) return;
+    const column = e.target.closest('.tasks-column');
+    if (!column) return;
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/plain');
+    const status = column.dataset.status;
+    document
+      .querySelectorAll('.tasks-column.drag-over')
+      .forEach(col => col.classList.remove('drag-over'));
+    moveTaskToStatus(id, status);
+  });
+}
+
+
+
+
+
 window.addEventListener("keydown", (e) => {
+
+  // ESC en vista de tareas: volver atrás
+  if (currentView === 'tareas') {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // Si estamos en el board, volver a proyectos
+      if (currentProjectId && tasksBoardView && !tasksBoardView.hidden) {
+        openProjectsView();
+      }
+      // Si estamos en proyectos, volver al launcher
+      else {
+        switchView('search');
+      }
+      return;
+    }
+  }
 
   if (currentView !== 'search') {
     return;

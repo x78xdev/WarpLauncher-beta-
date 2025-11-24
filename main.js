@@ -39,7 +39,7 @@ public class K {
 
 // Lanza Spotify (si no está) usando el protocolo
 function launchSpotify() {
-  try { shell.openExternal("spotify:"); } catch {}
+  try { shell.openExternal("spotify:"); } catch { }
 }
 
 // Crea/posiciona la ventanita
@@ -73,9 +73,9 @@ function showMiniPlayer() {
   const x = display.workArea.x + display.workArea.width - WIDTH - MARGIN;
   const y = display.workArea.y + MARGIN;
   miniWin.setPosition(Math.round(x), Math.round(y), false);
-  
- 
-  
+
+
+
 }
 
 // IPC: mostrar el mini-player (lo llamaremos tras ejecutar un comando)
@@ -161,7 +161,7 @@ function findEverythingCLI() {
       const found = t.stdout.toString().split(/\r?\n/).find(Boolean)?.trim();
       if (found && fs.existsSync(found)) return found;
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -251,15 +251,15 @@ ipcMain.handle("files:search", async (_evt, qRaw) => {
       let title = path.basename(filePath);
       let subtitle = filePath;
       let icon = iconMap[ext] || '📄';
-      
+
       if (details) {
         title = details.description || title;
-        
+
         const parts = [];
         if (details.publisher) parts.push(details.publisher);
         if (details.version) parts.push(`v${details.version}`);
         parts.push(filePath);
-        
+
         subtitle = parts.join(' - ');
         icon = '⚙️';
       }
@@ -304,11 +304,11 @@ ipcMain.handle("command:execute", async (_event, command) => {
       // Para comandos del sistema como 'control', 'ncpa.cpl', etc.
       if (command.run.includes('.cpl') || ['control', 'calc', 'notepad'].includes(command.run)) {
         console.log('Executing system command:', command.run); // Debug
-        const cmd = spawn('cmd', ['/c', 'start', '', command.run], { 
+        const cmd = spawn('cmd', ['/c', 'start', '', command.run], {
           shell: true,
-          windowsHide: false 
+          windowsHide: false
         });
-        
+
         cmd.on('error', (err) => console.error('Command error:', err));
         cmd.on('exit', (code) => console.log('Command exit code:', code));
         toggleWindow();
@@ -316,23 +316,23 @@ ipcMain.handle("command:execute", async (_event, command) => {
       // Para comandos de shutdown
       else if (command.run.startsWith('shutdown')) {
         console.log('Executing shutdown command:', command.run); // Debug
-        const cmd = spawn('cmd', ['/c', command.run], { 
+        const cmd = spawn('cmd', ['/c', command.run], {
           shell: true,
-          windowsHide: false 
+          windowsHide: false
         });
-        
+
         cmd.on('error', (err) => console.error('Shutdown error:', err));
         cmd.on('exit', (code) => console.log('Shutdown exit code:', code));
-        
+
       }
       // Para otros comandos
       else {
         console.log('Executing other command:', command.run); // Debug
-        const cmd = spawn(command.run, [], { 
+        const cmd = spawn(command.run, [], {
           shell: true,
-          windowsHide: false 
+          windowsHide: false
         });
-        
+
         cmd.on('error', (err) => console.error('Command error:', err));
         cmd.on('exit', (code) => console.log('Command exit code:', code));
         toggleWindow();
@@ -452,7 +452,7 @@ function appsQuickList() {
     list.push({ type: "app", title: "Windows Media Player", subtitle: "Abrir Reproductor", run: "wmplayer", icon: "🎵", tag: "APLICACIÓN" });
     list.push({ type: "app", title: "Task Manager", subtitle: "Administrador de tareas", run: "taskmgr", icon: "📊", tag: "APLICACIÓN" });
     list.push({ type: "app", title: "File Explorer", subtitle: "Explorador de archivos", run: "explorer", icon: "📂", tag: "APLICACIÓN" });
-    
+
     // Carpetas especiales
     const specialFolders = [
       { title: "Música", path: "%USERPROFILE%\\Music", icon: "🎵" },
@@ -491,6 +491,12 @@ function loadCommands() {
 
 ipcMain.handle('data:bootstrap', async () => {
   const commands = loadCommands();
+
+  // Debug: verificar si los iconos están en cachedApps
+  console.log('📦 Enviando al renderer:', cachedApps.length, 'apps');
+  if (cachedApps.length > 0) {
+    console.log('🔍 Primera app:', cachedApps[0].title, 'tiene iconDataUrl:', !!cachedApps[0].iconDataUrl);
+  }
 
   return {
     commands,
@@ -567,8 +573,8 @@ function createWindow() {
   });
 
   if (process.platform === "darwin") {
-    try { win.setVibrancy("under-window"); } catch {}
-    try { win.setVisualEffectState("active"); } catch {}
+    try { win.setVibrancy("under-window"); } catch { }
+    try { win.setVisualEffectState("active"); } catch { }
   }
 
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
@@ -647,6 +653,11 @@ function ensureEverythingRunning() {
 }
 
 app.whenReady().then(async () => {
+  // TEMPORAL: Limpiar caché de iconos para re-extraer desde .exe
+  const { clearIconCache } = require('./utils/icon-extractor');
+  clearIconCache();
+  console.log('🗑️ Caché de iconos limpiado');
+
   try {
     cachedApps = await scanStartMenu();
     console.log(`WarpLaunch: detectadas ${cachedApps.length} aplicaciones del menú Inicio`);
@@ -654,21 +665,19 @@ app.whenReady().then(async () => {
     console.error('Error escaneando aplicaciones:', err);
     cachedApps = [];
   }
-    ensureEverythingRunning();
-    createWindow();
-    registerGlobalHotkey();
-    //registerDevToolsShortcut();
-    
-    // Abrir DevTools automáticamente al inicio
-    //if (win) {
-    //  win.webContents.openDevTools({ mode: 'detach' });
-    ///}
+  ensureEverythingRunning();
+  createWindow();
+  registerGlobalHotkey();
+
+  // Abrir DevTools automáticamente al inicio
+  if (win) {
+    win.webContents.openDevTools({ mode: 'detach' });
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
-
 
 
 app.on("will-quit", () => {

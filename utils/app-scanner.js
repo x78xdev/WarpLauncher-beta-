@@ -3,10 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const fg = require('fast-glob');
-
+const { extractIcon, clearIconCache } = require('./icon-extractor');
+clearIconCache();
 /**
  * Escanea accesos directos del menú Inicio (Programas) y devuelve
- * una lista de apps con nombre y ruta.
+ * una lista de apps con nombre, ruta e icono.
  */
 
 
@@ -37,14 +38,14 @@ async function scanStartMenu() {
   const roots = [programDataStart, userStart];
 
   for (const root of roots) {
-  if (!fs.existsSync(root)) continue;
+    if (!fs.existsSync(root)) continue;
 
-  const files = await fg(['**/*.lnk', '**/*.exe'], {
-    cwd: root,
-    absolute: true,
-    onlyFiles: true,
-    suppressErrors: true
-  });
+    const files = await fg(['**/*.lnk', '**/*.exe'], {
+      cwd: root,
+      absolute: true,
+      onlyFiles: true,
+      suppressErrors: true
+    });
 
     for (const fullPath of files) {
       const base = path.basename(fullPath);
@@ -66,17 +67,22 @@ async function scanStartMenu() {
       if (seen.has(key)) continue;
       seen.add(key);
 
+      // 3) Extraer el icono de la aplicación
+      const iconDataUrl = await extractIcon(fullPath);
+      console.log(`📱 App: ${nameWithoutExt}, Icon: ${iconDataUrl ? 'OK' : 'FAIL'}`);
+
       apps.push({
         kind: 'app',
         title: nameWithoutExt,
         subtitle: fullPath,
         run: fullPath,
-        tag: 'APP'
+        tag: 'APP',
+        iconDataUrl: iconDataUrl  // Añadir el icono como data URL
       });
     }
   }
 
-
+  console.log(`✅ Total apps encontradas: ${apps.length}`);
   return apps;
 }
 

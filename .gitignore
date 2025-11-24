@@ -21,4 +21,3 @@ release/
 *.log
 .DS_Store
 Thumbs.db
-/renderer

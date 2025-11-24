@@ -15,7 +15,9 @@
     "chokidar": "^4.0.3",
     "electron-store": "^9.0.0",
     "fast-glob": "^3.3.3",
-    "fuse.js": "^7.0.0"
+    "fuse.js": "^7.0.0",
+    "resedit": "^3.0.1",
+    "windows-shortcuts": "^0.1.6"
   },
   "devDependencies": {
     "electron": "^31.2.0",

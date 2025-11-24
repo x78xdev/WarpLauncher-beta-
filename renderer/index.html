@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,13 +8,14 @@
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
   <link rel="stylesheet" href="styless.css" />
 </head>
+
 <body>
   <div id="wrap" hidden>
     <div id="palette">
       <div class="header">
         <input id="search" type="text" placeholder="Type to search…   (apps, files, commands)" autofocus />
       </div>
-      <ul id="results"></ul> 
+      <ul id="results"></ul>
       <div class="footer">
         <span>↑/↓ navegar</span>
         <span>↵ abrir</span>
@@ -22,7 +24,68 @@
     </div>
   </div>
 
-  
+  <!-- ===== View: Tareas (Proyectos + Kanban) ===== -->
+  <div id="view-tareas" hidden>
+    <div class="view-header">
+      <div class="view-header-text">
+        <h1 class="view-title" id="tasks-view-title">Proyectos</h1>
+        <p class="view-subtitle" id="tasks-view-subtitle">
+          El ige un proyecto o crea uno nuevo
+        </p>
+      </div>
+      <div class="view-header-actions">
+        <button id="btn-tasks-back" class="btn-secondary" hidden>
+          ← Proyectos
+        </button>
+        <button id="btn-add-task" class="btn-primary" hidden>
+          ＋ Nueva tarea
+        </button>
+      </div>
+    </div>
+
+    <div id="tasks-projects-view" class="tasks-projects-view">
+      <!-- Barra para crear proyecto -->
+      <div id="project-create-bar" class="project-create-bar" hidden>
+        <form id="project-form" class="project-form">
+          <input id="project-name-input" class="project-input" type="text"
+            placeholder="Nombre del proyecto (ej. App TFI Flutter)" autocomplete="off" />
+          <button type="submit" class="btn-primary">Crear</button>
+          <button type="button" id="btn-cancel-project" class="btn-secondary">
+            Cancelar
+          </button>
+        </form>
+      </div>
+
+      <!-- Grid de proyectos -->
+      <div class="projects-grid" id="projects-grid"></div>
+    </div>
+
+    <!-- =====View: Tareas (Board) ===== -->
+    <div id="tasks-board-view" hidden>
+      <div class="tasks-board" id="tasks-board">
+        <section class="tasks-column" data-status="idea">
+          <header class="tasks-column-header">
+            <span class="tasks-column-title">Ideas</span>
+          </header>
+          <div class="tasks-list" id="tasks-idea"></div>
+        </section>
+
+        <section class="tasks-column" data-status="doing">
+          <header class="tasks-column-header">
+            <span class="tasks-column-title">En producción</span>
+          </header>
+          <div class="tasks-list" id="tasks-doing"></div>
+        </section>
+
+        <section class="tasks-column" data-status="done">
+          <header class="tasks-column-header">
+            <span class="tasks-column-title">Terminado</span>
+          </header>
+          <div class="tasks-list" id="tasks-done"></div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== View: IA (placeholder) ===== -->
   <div id="view-ia" hidden>
@@ -38,7 +101,7 @@
     <button class="dock-btn active" data-view="search" title="Launcher">
       <span class="dock-icon">🗂️</span>
     </button>
-    <button class="dock-btn" data-view="tareas" title="Tareas">
+    <button class="dock-btn" data-view="tareas" title="Proyectos">
       <span class="dock-icon">🎯</span>
     </button>
     <button class="dock-btn" data-view="Notas" title="Notas">
@@ -52,7 +115,39 @@
     </button>
   </div>
 
+  <!-- Modal para editar tareas -->
+  <div id="edit-task-modal" class="modal-overlay" hidden>
+    <div class="modal-content">
+      <h3>Editar Tarea</h3>
+      <input id="edit-task-title" type="text" placeholder="Título" class="task-input" style="margin-bottom: 10px;">
+      <textarea id="edit-task-body" rows="3" placeholder="Detalles" class="task-textarea"
+        style="margin-bottom: 15px;"></textarea>
+      <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="btn-cancel-edit" class="btn-secondary">Cancelar</button>
+        <button id="btn-save-edit" class="btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para añadir tarea -->
+  <div id="add-task-modal" class="modal-overlay" hidden>
+    <div class="modal-content">
+      <h3>Nueva Tarea</h3>
+      <form id="task-form">
+        <input id="task-title-input" type="text" placeholder="Título de la tarea" class="task-input"
+          style="margin-bottom: 10px;" autocomplete="off">
+        <textarea id="task-body-input" rows="3" placeholder="Detalles (opcional)" class="task-textarea"
+          style="margin-bottom: 15px;"></textarea>
+        <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" id="btn-cancel-add-task" class="btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-primary">Añadir</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
   <script src="app.js"></script>
 </body>
+
 </html>
