@@ -2,13 +2,18 @@
   "name": "warplaunch",
   "version": "0.1.0",
   "description": "Raycast-like command palette for desktop",
-  "main": "main.js",
+  "main": "dist/main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron .",
-    "pack:win": "electron-packager . WarpLaunch --platform=win32 --arch=x64 --icon=assets/icon.ico --overwrite",
-    "pack:mac": "electron-packager . WarpLaunch --platform=darwin --arch=arm64 --icon=assets/icon.icns --overwrite",
-    "pack:linux": "electron-packager . WarpLaunch --platform=linux --arch=x64 --overwrite"
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc",
+    "dev": "tsc && electron .",
+    "start": "npm run build && electron .",
+    "watch": "tsc --watch",
+    "pack:win": "npm run build && electron-packager . WarpLaunch --platform=win32 --arch=x64 --icon=assets/icon.ico --overwrite",
+    "pack:mac": "npm run build && electron-packager . WarpLaunch --platform=darwin --arch=arm64 --icon=assets/icon.icns --overwrite",
+    "pack:linux": "npm run build && electron-packager . WarpLaunch --platform=linux --arch=x64 --overwrite",
+    "test-icon": "ts-node scripts/test-icon.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
@@ -16,11 +21,17 @@
     "electron-store": "^9.0.0",
     "fast-glob": "^3.3.3",
     "fuse.js": "^7.0.0",
+    "get-installed-apps": "^1.1.1",
     "resedit": "^3.0.1",
     "windows-shortcuts": "^0.1.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.10.1",
     "electron": "^31.2.0",
-    "electron-rebuild": "^3.2.9"
+    "electron-rebuild": "^3.2.9",
+    "rimraf": "^6.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

@@ -611,7 +611,7 @@ body::after {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
+  width: 97vw;
   padding: 20px;
   background: transparent;
   position: relative;

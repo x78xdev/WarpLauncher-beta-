@@ -1383,25 +1383,32 @@ function render(list) {
       iconContainer.className = "icon";
 
       // Para apps, intentar usar el icono real primero
-      if (item.kind === 'app' && item.iconDataUrl) {
-        console.log('🖼️ Mostrando icono real para:', item.title);
-        const img = document.createElement("img");
-        img.src = item.iconDataUrl;
-        img.alt = item.title;
-        img.style.width = "22px";
-        img.style.height = "22px";
-        img.style.objectFit = "contain";
-        iconContainer.appendChild(img);
-      } else if (item.kind === 'app' && item.data?.iconDataUrl) {
-        console.log('🖼️ Mostrando icono real (data) para:', item.title);
-        // También verificar en item.data por si viene de ahí
-        const img = document.createElement("img");
-        img.src = item.data.iconDataUrl;
-        img.alt = item.title;
-        img.style.width = "22px";
-        img.style.height = "22px";
-        img.style.objectFit = "contain";
-        iconContainer.appendChild(img);
+      if (item.kind === 'app') {
+        if (item.iconDataUrl || item.data?.iconDataUrl) {
+          // Caso 1: Icono ya disponible (caché o precargado)
+          const url = item.iconDataUrl || item.data?.iconDataUrl;
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = item.title;
+          img.style.width = "22px";
+          img.style.height = "22px";
+          img.style.objectFit = "contain";
+          iconContainer.appendChild(img);
+        } else {
+          // Caso 2: Lazy Loading
+          const img = document.createElement("img");
+          // Placeholder transparente o spinner
+          img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3C/svg%3E";
+          img.dataset.path = item.path || item.run;
+          img.alt = item.title;
+          img.style.width = "22px";
+          img.style.height = "22px";
+          img.style.objectFit = "contain";
+          img.className = "lazy-icon";
+          iconContainer.appendChild(img);
+
+          if (iconObserver) iconObserver.observe(img);
+        }
       } else if (item.icon) {
         iconContainer.textContent = item.icon;
       } else if (item.kind === 'file') {
@@ -1585,8 +1592,67 @@ function resetHome() {
 }
 
 // ===== Bootstrap =====
+// ===== Bootstrap =====
+let iconObserver;
+
 async function bootstrap() {
   loadState();
+
+  // Configurar Lazy Loading de iconos
+  iconObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        const appPath = img.dataset.path;
+
+        if (appPath && !img.dataset.loaded) {
+          img.dataset.loaded = "true"; // Evitar múltiples llamadas
+
+          window.warp.getIcon(appPath).then(icon => {
+            if (icon) {
+              img.src = icon;
+              img.classList.remove('lazy-icon');
+
+              // Actualizar modelo para cachear en memoria del renderer
+              const item = staticModel.find(i => i.path === appPath || i.run === appPath);
+              if (item) item.iconDataUrl = icon;
+            } else {
+              // Fallback visual mejorado: Mostrar iniciales
+              const item = staticModel.find(i => i.path === appPath || i.run === appPath);
+              const initials = item ? (item.title || '??').substring(0, 2).toUpperCase() : '??';
+
+              img.style.display = 'none'; // Ocultar imagen rota
+              const fallback = document.createElement('div');
+              fallback.className = 'icon-fallback';
+              fallback.textContent = initials;
+              fallback.style.cssText = `
+                width: 100%; height: 100%;
+                display: flex; align-items: center; justify-content: center;
+                background: #444; color: #fff; border-radius: 4px;
+                font-size: 10px; font-weight: bold;
+              `;
+              img.parentElement.appendChild(fallback);
+            }
+          }).catch(err => {
+            console.error('Error pidiendo icono:', err);
+            img.style.display = 'none';
+            const fallback = document.createElement('div');
+            fallback.className = 'icon-fallback';
+            fallback.textContent = '⚠️';
+            fallback.style.cssText = `
+                width: 100%; height: 100%;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 12px;
+              `;
+            img.parentElement.appendChild(fallback);
+          });
+
+          iconObserver.unobserve(img);
+        }
+      }
+    });
+  }, { root: null, rootMargin: "100px" });
+
   try {
     const data = await window.warp.bootstrap();
 
@@ -1602,6 +1668,36 @@ async function bootstrap() {
       ignoreLocation: true,
       keys: ["title", "subtitle", "tag"]
     });
+
+    // Escuchar actualizaciones progresivas de apps
+    if (window.warp.onAppsUpdate) {
+      window.warp.onAppsUpdate((newApps) => {
+        console.log(`📦 Recibidas ${newApps.length} apps nuevas`);
+        const mappedApps = newApps.map(a => toItem("app", a));
+
+        // Añadir solo las que no estén ya (por path)
+        const currentPaths = new Set(staticModel.map(i => i.path || i.run));
+        let addedCount = 0;
+
+        mappedApps.forEach(app => {
+          const key = app.path || app.run;
+          if (!currentPaths.has(key)) {
+            staticModel.push(app);
+            currentPaths.add(key);
+            addedCount++;
+          }
+        });
+
+        if (addedCount > 0) {
+          fuse.setCollection(staticModel);
+          // Si estamos en Home o buscando, refrescar si es pertinente
+          // (Opcional: solo refrescar si el usuario no está escribiendo activamente para no saltar)
+          if (!currentQuery) {
+            renderMerged();
+          }
+        }
+      });
+    }
 
     resetHome();
 

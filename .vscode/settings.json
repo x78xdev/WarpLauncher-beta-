@@ -1,0 +1,9 @@
+{
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "files.associations": {
+        "*.ts": "typescript"
+    },
+    "typescript.validate.enable": true,
+    "javascript.validate.enable": false
+}
