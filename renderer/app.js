@@ -1492,6 +1492,19 @@ function render(list) {
     li.appendChild(titleDiv);
     li.appendChild(subtitleDiv);
 
+    li.addEventListener("dblclick", () => runItem(item));
+
+    // Only show context menu for files
+    if (item.kind === 'file') {
+      li.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showContextMenu(e.clientX, e.clientY, item);
+      });
+    }
+
+    resultsEl.appendChild(li);
+
     li.addEventListener("mouseenter", () => {
       cursor = i;
       updateActiveItem();
@@ -1501,8 +1514,6 @@ function render(list) {
       cursor = i;
       updateActiveItem();
     });
-
-    li.addEventListener("dblclick", () => runItem(item));
 
     resultsEl.appendChild(li);
   });
@@ -2047,6 +2058,87 @@ window.addEventListener('keydown', (e) => {
 window.warp.focusInput(() => {
   inputEl.focus();
   inputEl.select();
+});
+
+// ===== Context Menu Logic =====
+const contextMenuEl = document.getElementById('context-menu');
+let contextMenuItem = null;
+function showContextMenu(x, y, item) {
+  console.log('showContextMenu called', { x, y, item });
+  if (!contextMenuEl) {
+    console.error('Context menu element not found!');
+    return;
+  }
+
+  contextMenuItem = item;
+  contextMenuEl.style.left = `${x}px`;
+  contextMenuEl.style.top = `${y}px`;
+  contextMenuEl.hidden = false;
+  contextMenuEl.style.display = 'flex'; // Show menu
+
+  console.log('Menu shown at', x, y);
+
+  // Adjust position if it goes off-screen
+  const rect = contextMenuEl.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    contextMenuEl.style.left = `${window.innerWidth - rect.width - 10}px`;
+  }
+  if (rect.bottom > window.innerHeight) {
+    contextMenuEl.style.top = `${window.innerHeight - rect.height - 10}px`;
+  }
+}
+function hideContextMenu() {
+  //console.log('Hiding context menu'); // Debug
+  if (contextMenuEl) {
+    contextMenuEl.hidden = true;
+    contextMenuEl.style.display = 'none'; // Force hide
+  }
+  contextMenuItem = null;
+}
+
+// Global click to hide context menu
+document.addEventListener('click', (e) => {
+  if (contextMenuEl && !contextMenuEl.contains(e.target)) {
+    hideContextMenu();
+  }
+});
+
+// Hide context menu when clicking on any result item
+if (resultsEl) {
+  resultsEl.addEventListener('click', () => {
+    hideContextMenu();
+  });
+}
+
+// Context menu actions
+contextMenuEl?.addEventListener('click', async (e) => {
+  const menuItem = e.target.closest('.context-menu-item');
+
+  // Always hide the menu first, regardless of what was clicked
+  if (!menuItem || !contextMenuItem) {
+    hideContextMenu();
+    return;
+  }
+
+  const action = menuItem.dataset.action;
+  const itemToProcess = contextMenuItem; // Save reference before hiding
+
+  // Hide menu immediately (synchronously)
+  hideContextMenu();
+
+  if (action === 'open-cmd') {
+    let targetPath = itemToProcess.path || itemToProcess.subtitle;
+    if (itemToProcess.kind === 'app') {
+      targetPath = itemToProcess.run || itemToProcess.path;
+    }
+
+    if (targetPath) {
+      console.log('Opening CMD in:', targetPath);
+      await window.warp.openCmd(targetPath);
+    }
+  } else if (action === 'open-item') {
+    runItem(itemToProcess);
+  }
 });
 
 // iniciar

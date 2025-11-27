@@ -4,6 +4,29 @@ import { app } from 'electron';
 import { getWinInstalledApps, InstalledApp } from 'get-installed-apps';
 import { AppItem } from '../types';
 
+const CACHE_FILE = path.join(app.getPath('userData'), 'apps-cache.json');
+
+const EXCLUDED_KEYWORDS = [
+    'uninstall',
+    'desinstalar',
+    'unins',
+    'remove',
+    'repair',
+    'modify',
+    'install',
+    'setup',
+    'help',
+    'ayuda',
+    'readme',
+    'leeme',
+    'license',
+    'licencia',
+    'url',
+    'website',
+    'update',
+    'eliminar'
+];
+
 // Helper to parse DisplayIcon: "C:\path\file.exe,0"
 function parseDisplayIcon(displayIcon: string | undefined): { file: string | null, index: number } {
     if (!displayIcon) {
@@ -71,7 +94,39 @@ async function getIconBase64ForFile(filePath: string): Promise<string | null> {
     }
 }
 
-export async function scanStartMenuProgressive(onProgress?: (apps: AppItem[]) => void): Promise<AppItem[]> {
+function loadCache(): AppItem[] | null {
+    try {
+        if (fs.existsSync(CACHE_FILE)) {
+            const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
+            return JSON.parse(raw);
+        }
+    } catch (e) {
+        console.error('Error loading cache:', e);
+    }
+    return null;
+}
+
+function saveCache(apps: AppItem[]) {
+    try {
+        fs.writeFileSync(CACHE_FILE, JSON.stringify(apps));
+    } catch (e) {
+        console.error('Error saving cache:', e);
+    }
+}
+
+export async function scanStartMenuProgressive(onProgress?: (apps: AppItem[]) => void, forceRefresh = false): Promise<AppItem[]> {
+    // 1. Try to load from cache if not forced
+    if (!forceRefresh) {
+        const cached = loadCache();
+        if (cached && cached.length > 0) {
+            console.log(`⚡ Loaded ${cached.length} apps from cache.`);
+            if (onProgress) {
+                onProgress(cached);
+            }
+            return cached;
+        }
+    }
+
     console.log('🔄 Starting registry app scan...');
     const rawApps = await getWinInstalledApps();
     console.log(`Found ${rawApps.length} raw apps from registry.`);
@@ -85,8 +140,20 @@ export async function scanStartMenuProgressive(onProgress?: (apps: AppItem[]) =>
         const name = info.appName || info.DisplayName;
         if (!name) continue;
 
+        // Filter excluded keywords
+        const lowerName = name.toLowerCase();
+        if (EXCLUDED_KEYWORDS.some(k => lowerName.includes(k))) {
+            continue;
+        }
+
         const exePath = await guessExeForApp(info);
         if (!exePath) continue;
+
+        // Filter excluded keywords in path too
+        const lowerPath = exePath.toLowerCase();
+        if (EXCLUDED_KEYWORDS.some(k => lowerPath.includes(k))) {
+            continue;
+        }
 
         // Create AppItem
         const appItem: AppItem = {
@@ -102,8 +169,6 @@ export async function scanStartMenuProgressive(onProgress?: (apps: AppItem[]) =>
         const iconBase64 = await getIconBase64ForFile(exePath);
         if (iconBase64) {
             appItem.iconDataUrl = `data:image/png;base64,${iconBase64}`;
-        } else {
-            // Optional: Provide a fallback or leave undefined for frontend fallback
         }
 
         apps.push(appItem);
@@ -123,6 +188,7 @@ export async function scanStartMenuProgressive(onProgress?: (apps: AppItem[]) =>
     }
 
     console.log(`✅ Registry scan complete. Total valid apps: ${apps.length}`);
+    saveCache(apps);
     return apps;
 }
 

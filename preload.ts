@@ -42,7 +42,10 @@ const warpAPI: WarpAPI = {
     },
 
     // API solicitada por el usuario
-    scanApps: () => ipcRenderer.invoke('scan-apps')
+    scanApps: () => ipcRenderer.invoke('scan-apps'),
+
+    // Context Menu Actions
+    openCmd: (path: string) => ipcRenderer.invoke('shell:open-cmd', path)
 };
 
 contextBridge.exposeInMainWorld('warp', warpAPI);

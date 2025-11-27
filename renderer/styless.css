@@ -1009,6 +1009,165 @@ body::after {
 
 .modal-content h3 {
   margin-top: 0;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-form-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Tablero de tareas */
+.tasks-board {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-height: 300px;
+  /* Reduce esto de lo que esté actualmente */
+  max-height: 400px;
+  /* Agrega un máximo */
+  overflow: hidden;
+}
+
+.tasks-column {
+  display: flex;
+  flex-direction: column;
+  background: rgba(20, 20, 35, 0.6);
+  border-radius: 16px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+.tasks-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tasks-column-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+}
+
+.tasks-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Tarjetas de tarea */
+.task-card {
+  background: rgba(30, 30, 45, 0.8);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.task-card:hover {
+  border-color: rgba(139, 92, 246, 0.4);
+  transform: translateY(-2px);
+  background: rgba(40, 40, 60, 0.9);
+  box-shadow: 0 8px 16px rgba(139, 92, 246, 0.15);
+}
+
+.task-card.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.task-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.task-body {
+  font-size: 12px;
+  opacity: 0.8;
+  white-space: pre-line;
+  line-height: 1.4;
+}
+
+.task-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.task-delete {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.task-delete:hover {
+  opacity: 1;
+  color: #ff6b6b;
+}
+
+/* Highlight de columna al arrastrar */
+.tasks-column.drag-over {
+  outline: 2px dashed rgba(139, 92, 246, 0.7);
+  outline-offset: -8px;
+  background: rgba(139, 92, 246, 0.08);
+}
+
+/* ===== Modal Overlay ===== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(5px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay:not([hidden]) {
+  display: flex;
+}
+
+.modal-content {
+  background: linear-gradient(135deg,
+      rgba(20, 20, 30, 0.95) 0%,
+      rgba(15, 15, 25, 0.95) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(139, 92, 246, 0.2);
+  backdrop-filter: blur(20px);
+  animation: slideUp 0.2s ease;
+}
+
+.modal-content h3 {
+  margin-top: 0;
   margin-bottom: 16px;
   font-size: 18px;
   font-weight: 700;
@@ -1034,4 +1193,59 @@ body::after {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* ===== Context Menu ===== */
+.context-menu {
+  position: absolute;
+  background: rgba(15, 15, 25, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 180px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: menuFadeIn 0.1s ease-out;
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #E8E8F0;
+  font-size: 13px;
+  transition: all 0.1s ease;
+}
+
+.context-menu-item:hover {
+  background: rgba(139, 92, 246, 0.2);
+  color: #fff;
+}
+
+.context-menu-item .icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  opacity: 0.8;
 }

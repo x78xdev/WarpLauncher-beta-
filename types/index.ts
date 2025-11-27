@@ -73,6 +73,7 @@ export interface WarpAPI {
     getIcon: (path: string) => Promise<string | null>;
     onAppsUpdate: (handler: (apps: AppItem[]) => void) => void;
     scanApps: () => Promise<AppItem[]>;
+    openCmd: (path: string) => Promise<void>;
 }
 
 declare global {

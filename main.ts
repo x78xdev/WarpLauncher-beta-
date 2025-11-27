@@ -421,11 +421,7 @@ ipcMain.handle('open:item', async (_evt: IpcMainInvokeEvent, payload: OpenItemPa
     if (win?.isVisible()) win.hide();
 });
 
-function hideMainWindow(): void {
-    if (win && !win.isDestroyed()) {
-        win.hide();
-    }
-}
+
 
 // === Window & Tray ===
 function createWindow(): void {
@@ -474,11 +470,11 @@ function toggleWindow(): void {
         win.webContents.send('focus-input');
         win.webContents.send('launcher:show');
 
-        if (!miniWin || miniWin.isDestroyed()) {
-            showMiniPlayer();
-        } else {
-            miniWin.show();
-        }
+        //if (!miniWin || miniWin.isDestroyed()) {
+        //    showMiniPlayer();
+        //} else {
+        //    miniWin.show();
+        //}
     }
 }
 
@@ -533,6 +529,38 @@ ipcMain.handle('window:hide', () => {
     if (win) {
         win.hide();
         miniWin?.hide();
+    }
+});
+
+// Handler para abrir CMD en una carpeta
+ipcMain.handle('shell:open-cmd', async (_evt: IpcMainInvokeEvent, targetPath: string): Promise<void> => {
+    if (!targetPath) return;
+
+    try {
+        let dirPath = targetPath;
+
+        // Si es un archivo, obtener el directorio padre
+        if (fs.existsSync(targetPath)) {
+            const stats = fs.statSync(targetPath);
+            if (stats.isFile()) {
+                dirPath = path.dirname(targetPath);
+            }
+        } else {
+            // Si no existe, asumir que es un archivo y obtener el directorio
+            dirPath = path.dirname(targetPath);
+        }
+
+        // Abrir CMD en ese directorio usando 'start' para nueva ventana
+        spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/K', `cd /d "${dirPath}"`], {
+            detached: true,
+            stdio: 'ignore',
+            shell: true
+        });
+        if (win?.isVisible()) win.hide();
+
+        console.log(`Opened CMD in: ${dirPath}`);
+    } catch (error) {
+        console.error('Error opening CMD:', error);
     }
 });
 
